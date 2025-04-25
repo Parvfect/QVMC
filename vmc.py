@@ -135,9 +135,10 @@ class VMCvec:
             dummy_comp = dummy < psi_ratio
 
             condition = density_comp + dummy_comp
-            condition = condition.reshape(condition.shape[0], 1)
 
             rejection_ratio += np.where(condition, 1./N, 0.0)
+
+            condition = condition.reshape(condition.shape[0], 1)
 
             # Careful with overwriting
             r1 = np.where(condition, r1_trial, r1)
