@@ -137,3 +137,13 @@ def psi_laplacian(X):
     pcc = psi_c_second(X)
 
     t = 2 * cp * torch.dot(pa, pb) + 2 * bp * torch.dot(pa, pc) + 2 * ap * torch.dot(pb, pc) + bp * cp * sum(paa) + ap * cp * sum(pbb) + bp * ap * sum(pcc)
+    return t
+
+def local_energy(X):
+    ke = -0.5 * psi_laplacian(X)
+    r1 = X[:3]
+    r2 = X[3:6]
+
+    potential = -2 / torch.norm(r1) - 2 / torch.norm(r2) + 1 / torch.norm(r1 - r2)
+
+    return ke + potential
