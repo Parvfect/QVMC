@@ -102,7 +102,7 @@ alpha_2 = torch.tensor(0.6419, dtype=torch.float64, requires_grad=True) # 0.2119
 alpha_3 = torch.tensor(2.1406, dtype=torch.float64, requires_grad=True) # 0.1406
 alpha_4 = torch.tensor(3.003, dtype=torch.float64, requires_grad=True) # 0.003
 
-epochs = 50
+epochs = 10000
 alphas = [alpha_1, alpha_2, alpha_3, alpha_4]
 losses = []
 
@@ -117,7 +117,7 @@ config = {
 optimizer = torch.optim.Adam(alphas, lr=lr)
 
 # Training monitoring on wandb
-wandb_login(running_on_hpc=False)
+wandb_login(running_on_hpc=True)
 start_wandb_run(config=config, project_name="vmc")
 
 for i in tqdm(range(epochs)):
