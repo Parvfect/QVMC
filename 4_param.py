@@ -107,10 +107,14 @@ alphas = [alpha_1, alpha_2, alpha_3, alpha_4]
 losses = []
 
 lr = 0.001
+n_steps = 1
+mc_steps = 50000
 
 config = {
     "lr" : lr,
-    "alphas": alphas
+    "alphas": alphas,
+    "n_steps": n_steps,
+    "mc_steps": mc_steps
 }
 
 # Step 2: Create Adam optimizer
@@ -124,9 +128,8 @@ for i in tqdm(range(epochs)):
 
     # Step 5: Zero gradients (as usual in PyTorch)
     alphas = [alpha_1, alpha_2, alpha_3, alpha_4]
-    n_steps = 1
     alphas_metropolis = torch.tensor(alphas).unsqueeze(0).repeat(n_steps, 1)
-    sampled_Xs = metropolis(50000, n_steps, alphas=alphas_metropolis)
+    sampled_Xs = metropolis(mc_steps, n_steps, alphas=alphas_metropolis)
 
     E = get_local_energies(sampled_Xs.to(device))
     mean_E = get_mean_energies(E.to(cpu))
