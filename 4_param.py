@@ -126,7 +126,7 @@ for i in tqdm(range(epochs)):
     alphas = [alpha_1, alpha_2, alpha_3, alpha_4]
     n_steps = 10
     alphas_metropolis = torch.tensor(alphas).unsqueeze(0).repeat(n_steps, 1)
-    sampled_Xs = metropolis(10000, n_steps, alphas=alphas_metropolis)
+    sampled_Xs = metropolis(50000, n_steps, alphas=alphas_metropolis)
 
     E = get_local_energies(sampled_Xs.to(device))
     mean_E = get_mean_energies(E.to(cpu))
