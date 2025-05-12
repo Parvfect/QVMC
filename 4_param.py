@@ -124,7 +124,7 @@ for i in tqdm(range(epochs)):
 
     # Step 5: Zero gradients (as usual in PyTorch)
     alphas = [alpha_1, alpha_2, alpha_3, alpha_4]
-    n_steps = 10
+    n_steps = 1
     alphas_metropolis = torch.tensor(alphas).unsqueeze(0).repeat(n_steps, 1)
     sampled_Xs = metropolis(50000, n_steps, alphas=alphas_metropolis)
 
