@@ -117,7 +117,7 @@ losses = []
 
 lr = 0.001
 n_walkers = 10
-mc_steps = 50000
+mc_steps = 10000
 
 config = {
     "lr" : lr,
@@ -175,5 +175,7 @@ for i in tqdm(range(epochs)):
 
     torch.cuda.empty_cache()
     del sampled_Xs
+    del reshaped_X
+    del E
 
 
