@@ -34,8 +34,8 @@ def metropolis(N: int, n_runs: int, alphas: torch.tensor):
     """  
     assert alphas.shape[0] == n_runs        
     L = 1
-    r1 = (torch.rand(n_runs, 3, requires_grad=True) * 2 * L - L)
-    r2 = (torch.rand(n_runs, 3, requires_grad=True) * 2 * L - L)
+    r1 = (torch.rand(n_runs, 3) * 2 * L - L)
+    r2 = (torch.rand(n_runs, 3) * 2 * L - L)
     max_steps = 1000
     sampled_Xs = []
     rejection_ratio = 0
@@ -115,9 +115,9 @@ epochs = 10000
 alphas = [alpha_1, alpha_2, alpha_3, alpha_4]
 losses = []
 
-lr = 0.00001
-n_walkers = 10
-mc_steps = 10000
+lr = 0.001
+n_walkers = 200
+mc_steps = 5000
 
 config = {
     "lr" : lr,
