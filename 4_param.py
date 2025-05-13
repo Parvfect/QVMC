@@ -139,14 +139,14 @@ for i in tqdm(range(epochs)):
     alphas_metropolis = torch.tensor(alphas).unsqueeze(0).repeat(n_walkers, 1)
     sampled_Xs = metropolis(mc_steps, n_walkers, alphas=alphas_metropolis)
 
-    E = get_local_energies(sampled_Xs.to(device))
-    mean_E = get_mean_energies(E.to(cpu))
+    E = get_local_energies(sampled_Xs)
+    mean_E = get_mean_energies(E)
     loss = torch.abs(E_true - mean_E)
     losses.append(loss)
 
     reshaped_X = sampled_Xs.reshape(
         sampled_Xs.shape[1], sampled_Xs.shape[0], sampled_Xs.shape[2])
-    gradients = dE_dalpha(reshaped_X.to(device), E).to(cpu)
+    gradients = dE_dalpha(reshaped_X, E)
     gradients = torch.mean(gradients, axis=0)
     external_grads = gradients.detach()
 
