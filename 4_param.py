@@ -103,22 +103,30 @@ def get_gradients_from_expression(X_, E_):
 
 dE_dalpha = vmap(get_gradients_from_expression)
 
+def get_variances(E):
+    # Variance in random walkers mean energy
+    random_walker_variance = torch.mean((torch.mean(E.to(cpu), axis=1) - mean_E) ** 2)
+    mean_E_trial = E.mean(dim=1)
+    var_E_trial  = torch.mean(((E - mean_E_trial[:, None]) ** 2).mean(dim=1))
+    return random_walker_variance, var_E_trial
+
+
 device = torch.device("cuda")
 cpu = torch.device("cpu")
 E_true = -2.9037243770
 
-alpha_1 = torch.tensor(0.313, dtype=torch.float64, requires_grad=True) # 1.013
-alpha_2 = torch.tensor(0.6419, dtype=torch.float64, requires_grad=True) # 0.2119
-alpha_3 = torch.tensor(0.3206, dtype=torch.float64, requires_grad=True) # 0.1406
-alpha_4 = torch.tensor(0.821, dtype=torch.float64, requires_grad=True) # 0.003
+alpha_1 = torch.tensor(0.9827, dtype=torch.float64, requires_grad=True) # 1.013
+alpha_2 = torch.tensor(0.2789, dtype=torch.float64, requires_grad=True) # 0.2119
+alpha_3 = torch.tensor(0.2004, dtype=torch.float64, requires_grad=True) # 0.1406
+alpha_4 = torch.tensor(0.0603, dtype=torch.float64, requires_grad=True) # 0.003
 
 epochs = 10000
 alphas = [alpha_1, alpha_2, alpha_3, alpha_4]
 losses = []
 
-lr = 0.001
-n_walkers = 200
-mc_steps = 5000
+lr = 0.01
+n_walkers = 50
+mc_steps = 10000
 
 config = {
     "lr" : lr,
@@ -142,6 +150,7 @@ for i in tqdm(range(epochs)):
 
     E = get_local_energies(sampled_Xs)
     mean_E = get_mean_energies(E)
+    variances = get_variances(E.to(cpu))
     loss = torch.abs(E_true - mean_E)
     losses.append(loss)
 
@@ -154,10 +163,13 @@ for i in tqdm(range(epochs)):
     display_alphas = torch.stack(alphas).detach().tolist()
     display_gradients = external_grads.tolist()
     
-    print(f"Mean energy is {mean_E}")
-    print(f"Loss is {loss}")
-    print(f"Alphas are {display_alphas}")
-    print(f"Gradients are {display_gradients}")
+    print(
+        f"Mean energy is {mean_E}\n"
+        f"Loss is {loss}\n"
+        f"Random walker variance {variances[0]}\n"
+        f"Local energy variance {variances[1]}\n"
+        f"Alphas are {display_alphas}\n"
+        f"Gradients are {display_gradients}")
 
     metrics = {
             "mean_energy": mean_E,
