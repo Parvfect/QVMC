@@ -103,7 +103,7 @@ def psi_c(X):
     r2 = torch.norm(y)
     r12 = torch.norm(x - y)
 
-    return 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2)**2 - alpha_4 * r12
+    return 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2)**2 - alpha_4 * (r12) ** 2 
     
 
 def psi_c_first(X):
