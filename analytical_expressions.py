@@ -1,6 +1,20 @@
 
 import torch
 
+def psi(X):
+    x = X[:3]
+    y = X[3:6]
+    alpha_1, alpha_2, alpha_3, alpha_4 = X[6:]
+    r1 = torch.norm(x)
+    r2 = torch.norm(y)
+    r12 = torch.norm(x - y)
+
+    term1 = torch.exp(-2 * (r1 + r2))
+    term2 = 1 + 0.5 * r12 * torch.exp(-alpha_1 * r12)
+    term3 = 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2)**2 - alpha_4 * r12
+
+    return term1 * term2 * term3
+
 def psi_a(X):
     x = X[:3]
     y = X[3:6]
@@ -140,7 +154,7 @@ def psi_laplacian(X):
     return t
 
 def local_energy(X):
-    ke = -0.5 * psi_laplacian(X)
+    ke = -0.5 * psi_laplacian(X) / psi(X)
     r1 = X[:3]
     r2 = X[3:6]
 

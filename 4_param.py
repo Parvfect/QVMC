@@ -20,7 +20,7 @@ def psi(X):
 
     term1 = torch.exp(-2 * (r1 + r2))
     term2 = 1 + 0.5 * r12 * torch.exp(-alpha_1 * r12)
-    term3 = 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2)**2 - alpha_4 * r12
+    term3 = 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2) ** 2 - alpha_4 * r12 ** 2
 
     return term1 * term2 * term3
 
@@ -36,11 +36,11 @@ def metropolis(N: int, n_runs: int, alphas: torch.tensor):
     L = 1
     r1 = (torch.rand(n_runs, 3) * 2 * L - L)
     r2 = (torch.rand(n_runs, 3) * 2 * L - L)
-    max_steps = 1000
+    max_steps = 500
     sampled_Xs = []
     rejection_ratio = 0
 
-    for i in range(N):
+    for i in tqdm(range(N)):
         chose = torch.rand(n_runs).reshape(n_runs, 1)
         dummy = torch.rand(n_runs)
 
@@ -51,12 +51,13 @@ def metropolis(N: int, n_runs: int, alphas: torch.tensor):
         r2_trial = torch.where(chose >= 0.5, perturbed_r2, r2)
         psi_val = psi_vec(torch.cat((r1, r2, alphas), axis=1))
         psi_trial_val = psi_vec(torch.cat((r1_trial, r2_trial, alphas), axis=1))      
-        psi_ratio = psi_trial_val / psi_val
+        
+        psi_ratio = (psi_trial_val / psi_val) ** 2
 
-        density_comp = psi_trial_val >= psi_val
+        #density_comp = psi_trial_val >= psi_val
         dummy_comp = dummy < psi_ratio
 
-        condition = density_comp + dummy_comp
+        condition = dummy_comp
 
         rejection_ratio += torch.where(condition, 1./N, 0.0)
 
