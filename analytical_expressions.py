@@ -119,7 +119,7 @@ def psi_c_first(X):
 
     i = 0
 
-    return torch.stack([alpha_2 * (r1 + r2) * ((x[i] - y[i])/r12) + alpha_2 * r12 * (x[i]/r1) + 2 * (r1 - r2) * alpha_3 * (x[i]/r1) - alpha_4 * (x[i] - y[i])/r12 for i in range(3)] + [- alpha_2 * (r1 + r2) * ((x[i] - y[i])/r12) + alpha_2 * r12 * (y[i]/r2) - 2 * (r1 - r2) * alpha_3 * (y[i]/r2) + alpha_4 * (x[i] - y[i])/r12 for i in range(3)])
+    return torch.stack([alpha_2 * (r1 + r2) * ((x[i] - y[i])/r12) + alpha_2 * r12 * (x[i]/r1) + 2 * (r1 - r2) * alpha_3 * (x[i]/r1) - 2 * alpha_4 * r12 * (x[i] - y[i])/r12 for i in range(3)] + [- alpha_2 * (r1 + r2) * ((x[i] - y[i])/r12) + alpha_2 * r12 * (y[i]/r2) - 2 * (r1 - r2) * alpha_3 * (y[i]/r2) + 2 * alpha_4 * r12 * (x[i] - y[i])/r12 for i in range(3)])
 
 def psi_c_second(X):
     """Second order for first particle third part of psi - hessian verified """
@@ -134,10 +134,10 @@ def psi_c_second(X):
     x1 = x[0]
     y1 = y[0]
 
-    return torch.stack([alpha_2 * (2 * (x[i] / r1) * (x[i] - y[i])/ r12 + (r1 + r2) * (1/r12 - ((x[i] - y[i]) ** 2 / (r12) ** 3)) + r12 * (1/r1 - x[i]**2 / r1**3)) + alpha_3 * (2 * (x[i] / r1) ** 2 + 2 * (r1 - r2) * ((1/r1) - (x[i] **2) / (r1 ** 3))) - alpha_4 * (1/r12 - ((x[i] - y[i]) ** 2/ (r12) ** 3)) for i in range(3)] + [alpha_2 * (-2 * (y[i] / r2) * (x[i] - y[i])/ r12 + (r1 + r2) * (1/r12 - ((x[i] - y[i]) ** 2 / (r12) ** 3)) + r12 * (1/r2 - y[i]**2 / r2**3)) + alpha_3 * (2 * (y[i] / r2) ** 2 - 2 * (r1 - r2) * ((1/r2) - (y[i] **2) / (r2 ** 3))) - alpha_4 * (1/r12 - ((x[i] - y[i]) ** 2/ (r12) ** 3)) for i in range(3)])
+    return torch.stack([alpha_2 * (2 * (x[i] / r1) * (x[i] - y[i])/ r12 + (r1 + r2) * (1/r12 - ((x[i] - y[i]) ** 2 / (r12) ** 3)) + r12 * (1/r1 - x[i]**2 / r1**3)) + alpha_3 * (2 * (x[i] / r1) ** 2 + 2 * (r1 - r2) * ((1/r1) - (x[i] **2) / (r1 ** 3))) - 2 * alpha_4 * r12 * (1/r12 - ((x[i] - y[i]) ** 2/ (r12) ** 3)) - 2 * alpha_4 * ((x[i] - y[i])/r12) ** 2 for i in range(3)] + [alpha_2 * (-2 * (y[i] / r2) * (x[i] - y[i])/ r12 + (r1 + r2) * (1/r12 - ((x[i] - y[i]) ** 2 / (r12) ** 3)) + r12 * (1/r2 - y[i]**2 / r2**3)) + alpha_3 * (2 * (y[i] / r2) ** 2 - 2 * (r1 - r2) * ((1/r2) - (y[i] **2) / (r2 ** 3))) - 2 * alpha_4 * r12 * (1/r12 - ((x[i] - y[i]) ** 2/ (r12) ** 3)) - 2 * alpha_4 * (-((x[i] - y[i])/r12)) ** 2  for i in range(3)])
 
 
-def psi_laplacian(X):
+def psi_laplacian(X, return_sum=True):
     """Full Laplacian - hessian verified """
     
     ap = psi_a(X)
