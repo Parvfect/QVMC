@@ -115,18 +115,18 @@ device = torch.device("cuda")
 cpu = torch.device("cpu")
 E_true = -2.9037243770
 
-alpha_1 = torch.tensor(0.1827, dtype=torch.float64, requires_grad=True) # 1.013
-alpha_2 = torch.tensor(0.6389, dtype=torch.float64, requires_grad=True) # 0.2119
-alpha_3 = torch.tensor(0.8004, dtype=torch.float64, requires_grad=True) # 0.1406
-alpha_4 = torch.tensor(0.3603, dtype=torch.float64, requires_grad=True) # 0.003
+alpha_1 = torch.tensor(0.313, dtype=torch.float64, requires_grad=True) # 1.013
+alpha_2 = torch.tensor(0.6419, dtype=torch.float64, requires_grad=True) # 0.2119
+alpha_3 = torch.tensor(0.3206, dtype=torch.float64, requires_grad=True) # 0.1406
+alpha_4 = torch.tensor(0.821, dtype=torch.float64, requires_grad=True) # 0.003
 
-epochs = 10000
+epochs = 100000
 alphas = [alpha_1, alpha_2, alpha_3, alpha_4]
 losses = []
 
 lr = 0.001
 n_walkers = 50
-mc_steps = 10000
+mc_steps = 5000
 
 config = {
     "lr" : lr,
