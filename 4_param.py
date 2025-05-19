@@ -105,7 +105,7 @@ dE_dalpha = vmap(get_gradients_from_expression)
 
 def get_variances(E):
     # Variance in random walkers mean energy
-    random_walker_variance = torch.mean((torch.mean(E.to(cpu), axis=1) - mean_E) ** 2)
+    random_walker_variance = torch.mean((torch.mean(E, axis=1) - torch.mean(E)) ** 2)
     mean_E_trial = E.mean(dim=1)
     var_E_trial  = torch.mean(((E - mean_E_trial[:, None]) ** 2).mean(dim=1))
     return random_walker_variance, var_E_trial
