@@ -125,7 +125,7 @@ alphas = [alpha_1, alpha_2, alpha_3, alpha_4]
 losses = []
 
 lr = 0.001
-n_walkers = 50
+n_walkers = 100
 mc_steps = 5000
 
 config = {
@@ -140,48 +140,48 @@ optimizer = torch.optim.Adam(alphas, lr=lr)
 # Training monitoring on wandb
 wandb_login(running_on_hpc=True)
 start_wandb_run(config=config, project_name="vmc")
-
+alphas = [alpha_1, alpha_2, alpha_3, alpha_4]
 
 for i in tqdm(range(epochs)):
 
-    alphas = [alpha_1, alpha_2, alpha_3, alpha_4]
     alphas_metropolis = torch.tensor(alphas).unsqueeze(0).repeat(n_walkers, 1)
     sampled_Xs = metropolis(mc_steps, n_walkers, alphas=alphas_metropolis)
 
-    E = get_local_energies(sampled_Xs)
-    mean_E = get_mean_energies(E)
-    variances = get_variances(E.to(cpu))
-    loss = torch.abs(E_true - mean_E)
-    losses.append(loss)
+    with torch.no_grad():
+        E = get_local_energies(sampled_Xs)
+        mean_E = get_mean_energies(E)
+        variances = get_variances(E.to(cpu))
+        loss = torch.abs(E_true - mean_E)
+        losses.append(loss.item())
 
-    reshaped_X = sampled_Xs.reshape(
-        sampled_Xs.shape[1], sampled_Xs.shape[0], sampled_Xs.shape[2])
-    gradients = dE_dalpha(reshaped_X, E)
-    gradients = torch.mean(gradients, axis=0)
-    external_grads = gradients.detach()
+        reshaped_X = sampled_Xs.reshape(
+            sampled_Xs.shape[1], sampled_Xs.shape[0], sampled_Xs.shape[2])
+        gradients = dE_dalpha(reshaped_X, E)
+        gradients = torch.mean(gradients, axis=0)
+        external_grads = gradients.detach()
 
-    display_alphas = torch.stack(alphas).detach().tolist()
-    display_gradients = external_grads.tolist()
-    
-    print(
-        f"Mean energy is {mean_E}\n"
-        f"Loss is {loss}\n"
-        f"Random walker variance {variances[0]}\n"
-        f"Local energy variance {variances[1]}\n"
-        f"Alphas are {display_alphas}\n"
-        f"Gradients are {display_gradients}")
+        display_alphas = torch.stack(alphas).detach().tolist()
+        display_gradients = external_grads.tolist()
+        
+        print(
+            f"Mean energy is {mean_E}\n"
+            f"Loss is {loss}\n"
+            f"Random walker variance {variances[0]}\n"
+            f"Local energy variance {variances[1]}\n"
+            f"Alphas are {display_alphas}\n"
+            f"Gradients are {display_gradients}")
 
-    metrics = {
-            "mean_energy": mean_E,
-            "loss": loss,
-            "alphas": display_alphas,
-            "gradients": display_gradients
-        }
+        metrics = {
+                "mean_energy": mean_E,
+                "loss": loss,
+                "alphas": display_alphas,
+                "gradients": display_gradients
+            }
 
-    wandb.log(metrics)
+        wandb.log(metrics)
 
-    for p, g in zip(alphas, external_grads):
-        p.grad = g
+        for p, g in zip(alphas, external_grads):
+            p.grad = g
 
     optimizer.step()
     optimizer.zero_grad()
