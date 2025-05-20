@@ -11,7 +11,7 @@ def psi(X):
 
     term1 = torch.exp(-2 * (r1 + r2))
     term2 = 1 + 0.5 * r12 * torch.exp(-alpha_1 * r12)
-    term3 = 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2)**2 - alpha_4 * r12
+    term3 = 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2)**2 - alpha_4 * r12 ** 2
 
     return term1 * term2 * term3
 
