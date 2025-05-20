@@ -125,8 +125,8 @@ alphas = [alpha_1, alpha_2, alpha_3, alpha_4]
 losses = []
 
 lr = 0.001
-n_walkers = 200
-mc_steps = 20000
+n_walkers = 50
+mc_steps = 5000
 
 config = {
     "lr" : lr,
