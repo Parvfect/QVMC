@@ -1,6 +1,7 @@
 
 import torch
 
+
 def psi_alpha_1(X):
     x = X[:3]
     y = X[3:6]
@@ -11,7 +12,7 @@ def psi_alpha_1(X):
 
     part_1 = torch.exp(-2 * (r1 + r2))
     part_2 = 1 + 0.5 * r12 * torch.exp(-alpha_1 * r12)
-    part_3 = 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2)**2 - alpha_4 * r12
+    part_3 = 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2)**2 - alpha_4 * (r12 ** 2)
 
     return (-0.5 * (r12 ** 2) * torch.exp(-alpha_1 * r12) * 1/part_2)
 
@@ -25,7 +26,7 @@ def psi_alpha_2(X):
 
     part_1 = torch.exp(-2 * (r1 + r2))
     part_2 = 1 + 0.5 * r12 * torch.exp(-alpha_1 * r12)
-    part_3 = 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2)**2 - alpha_4 * r12
+    part_3 = 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2)**2 - alpha_4 * (r12 ** 2)
 
     return (r1 + r2) * r12 * 1/part_3
 
@@ -39,7 +40,7 @@ def psi_alpha_3(X):
 
     part_1 = torch.exp(-2 * (r1 + r2))
     part_2 = 1 + 0.5 * r12 * torch.exp(-alpha_1 * r12)
-    part_3 = 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2)**2 - alpha_4 * r12
+    part_3 = 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2)**2 - alpha_4 * (r12 ** 2)
 
     return 1/part_3 * (r1 - r2)**2
 
@@ -53,9 +54,9 @@ def psi_alpha_4(X):
 
     part_1 = torch.exp(-2 * (r1 + r2))
     part_2 = 1 + 0.5 * r12 * torch.exp(-alpha_1 * r12)
-    part_3 = 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2)**2 - alpha_4 * r12
+    part_3 = 1 + alpha_2 * (r1 + r2) * r12 + alpha_3 * (r1 - r2)**2 - alpha_4 * (r12 ** 2)
 
-    return 1/part_3 * (-r12)
+    return 1/part_3 * (-r12 ** 2)
 
 def get_psi_alpha(X):
     return torch.stack([
