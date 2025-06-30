@@ -40,8 +40,8 @@ def init_xavier_uniform(module):
 
 
 input_dim = 3
-n_hidden_layers = 4
-hidden_dim = 64
+n_hidden_layers = 3
+hidden_dim = 32
 output_size = 1
 
 model = MLP(
@@ -54,7 +54,7 @@ model = MLP(
 model.apply(init_xavier_uniform)
 
 
-def psi_nn(x, model):
+def psi_nn(x, model, return_log=False):
     if next(model.parameters()).is_cuda:
         x = x.to(next(model.parameters()).device)
 
@@ -76,4 +76,7 @@ def psi_nn(x, model):
     jastrow = r12 / (2.0 * (1.0 + 0.5 * r12))
 
     log_psi = hydrogenic + jastrow + nn_out
+
+    if return_log:
+        return log_psi.squeeze()
     return torch.exp(log_psi).squeeze()
