@@ -171,7 +171,7 @@ losses = []
 lr = 0.001
 n_walkers = 50
 mc_steps = 5000
-model_save_iterations = 100
+model_save_iterations = 50
 
 uid = str(datetime.datetime.now()).replace(
     ' ', '.').replace('-','').replace(':',"")
