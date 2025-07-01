@@ -241,6 +241,6 @@ for i in tqdm(range(epochs)):
         'epoch': i,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-        }, model_save_path)
+        }, model_savepath)
 
 
