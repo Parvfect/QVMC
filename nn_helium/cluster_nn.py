@@ -7,6 +7,7 @@ from training_monitoring import wandb_login, start_wandb_run
 import os
 import wandb
 from nn import psi_nn, model
+from datetime import datetime
 
 
 def metropolis(N: int, n_runs: int, model):  
@@ -170,12 +171,19 @@ losses = []
 lr = 0.001
 n_walkers = 50
 mc_steps = 5000
+model_save_iterations = 100
 
 config = {
     "lr" : lr,
     "n_walkers": n_walkers,
     "mc_steps": mc_steps
 }
+
+uid = str(datetime.datetime.now()).replace(
+    ' ', '.').replace('-','').replace(':',"")
+savepath = os.path.join(os.environ['HOME'], os.path.join("training_logs", f"{uid}"))
+os.mkdir(savepath)
+model_savepath = os.path.join(savepath, "model.pth")
 
 optimizer = torch.optim.Adam(model.parameters())
 
@@ -226,5 +234,12 @@ for i in tqdm(range(epochs)):
     del sampled_Xs
     del E
     del grad_Xs
+
+    if (i+1) % model_save_iterations == 0:
+        torch.save({
+        'epoch': i,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        }, model_save_path)
 
 

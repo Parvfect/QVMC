@@ -61,22 +61,19 @@ def psi_nn(x, model, return_log=False):
     r1_vec = x[:, :3]
     r2_vec = x[:, 3:]
 
-    r1 = torch.norm(r1_vec, dim=1, keepdim=True)  # (batch_size, 1)
-    r2 = torch.norm(r2_vec, dim=1, keepdim=True)  # (batch_size, 1)
-    r12 = torch.norm(r1_vec - r2_vec, dim=1, keepdim=True)  # (batch_size, 1)
+    r1 = torch.norm(r1_vec, dim=1, keepdim=True)
+    r2 = torch.norm(r2_vec, dim=1, keepdim=True)
+    r12 = torch.norm(r1_vec - r2_vec, dim=1, keepdim=True)
 
-    # Combine scalar features for NN
     features = torch.cat([r1, r2, r12], dim=1)
 
-    # Neural net output
-    nn_out = model(features)  # Assume model.nn is your MLP
-    Z = 2.0  # For Helium
-
-    hydrogenic = -Z * (r1 + r2)
+    nn_out = model(features)
+    hydrogenic = -2 * (r1 + r2)
     jastrow = r12 / (2.0 * (1.0 + 0.5 * r12))
 
     log_psi = hydrogenic + jastrow + nn_out
 
     if return_log:
         return log_psi.squeeze()
+    
     return torch.exp(log_psi).squeeze()
