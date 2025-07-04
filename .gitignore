@@ -3,3 +3,4 @@ wandb_api_key.txt
 **/wandb
 **/Papers
 **/updates
+*.pth
