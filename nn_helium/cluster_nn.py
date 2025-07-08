@@ -10,16 +10,15 @@ from nn import psi_nn, model
 import datetime
 
 
-def metropolis(N: int, n_runs: int, model):  
+def metropolis(N: int, pos: torch.tensor, n_runs: int, model):  
     
     L = 0.5
-    r1 = torch.rand(n_runs, 3)
-    r2 = torch.rand(n_runs, 3)
-
-    sampled_Xs = []
+    
+    r1 = pos[:, :3]
+    r2 = pos[:, 3:]
     accept_count = 0
 
-    for _ in tqdm(range(N)):
+    for _ in range(N):
         chose = torch.rand(n_runs, 1)
 
         perturbed_r1 = r1 + L * torch.randn(n_runs, 3)
@@ -34,7 +33,6 @@ def metropolis(N: int, n_runs: int, model):
         psi_val = psi_nn(x_old, model, return_log=True)
         psi_trial_val = psi_nn(x_trial, model, return_log=True)
 
-        #psi_ratio = (psi_trial_val / psi_val) ** 2
         psi_ratio = torch.exp(2 * (psi_trial_val - psi_val)) 
 
         rand_uniform = torch.rand(n_runs)
@@ -47,14 +45,11 @@ def metropolis(N: int, n_runs: int, model):
         r1 = torch.where(mask, r1_trial, r1)
         r2 = torch.where(mask, r2_trial, r2)
 
-        sampled_Xs.append(torch.cat((r1, r2), dim=1))
 
     acceptance_ratio = accept_count / (N * n_runs)
     print(f"Acceptance ratio: {acceptance_ratio:.4f}")
 
-    return torch.stack(sampled_Xs)
-
-
+    return torch.cat((r1, r2), dim=1)
 
 def local_energy(positions, model):
     positions = positions.clone().detach().requires_grad_(True)
@@ -68,17 +63,13 @@ def local_energy(positions, model):
     r2 = torch.norm(r2_vec, dim=1, keepdim=True)
     r12 = torch.norm(r1_vec - r2_vec, dim=1, keepdim=True)
 
-    # Prepare input for NN
     scalar_features = torch.cat([r1, r2, r12], dim=1)
 
-    # Evaluate log ψ
     log_psi_val = psi_nn(positions, model, return_log=False)
 
-    # Gradient ∇ log(ψ)
     grad_log_psi = torch.autograd.grad(log_psi_val.sum(), positions, create_graph=True)[0]
     grad_norm_sq = (grad_log_psi ** 2).sum(dim=1)
 
-    # Laplacian ∇² log(ψ)
     laplacian = torch.zeros_like(log_psi_val)
     for i in range(positions.shape[1]):
         grad_i = grad_log_psi[:, i]
@@ -98,13 +89,7 @@ def local_energy(positions, model):
 
 def get_local_energy(sampled_Xs, model):
 
-    mc_steps = sampled_Xs.shape[0]
-    walkers = sampled_Xs.shape[1]
-    reshaped_Xs = sampled_Xs.permute(1, 0, 2) # N_walkers, N, input_dim
-    flattened_Xs = reshaped_Xs.flatten(end_dim=1) # N_walkers * N, input_dim
-    local_E = local_energy(flattened_Xs, model) # N_walkers * N, 1
-    return local_E.reshape(walkers, mc_steps)
- 
+    return local_energy(sampled_Xs, model)
  
 
 def parameter_gradients(x, E, model, n_walkers, mc_steps):
@@ -123,24 +108,20 @@ def parameter_gradients(x, E, model, n_walkers, mc_steps):
     flat_grads = torch.cat([g.reshape(x.shape[0], -1) for g in grads], dim=1)
 
     n_parameters = flat_grads.shape[-1]
+    mean_grad = torch.mean(flat_grads, axis=0)
     
     E = E.flatten()
     mean_E = torch.mean(E)
 
     centered_E = E - mean_E
-    centered_grads = flat_grads
+    centered_grads = flat_grads - mean_grad
     grads = torch.mean(centered_grads.T * centered_E, axis=1)
     
     return grads.reshape(n_parameters, 1)
 
 def get_parameter_gradients(sampled_Xs, local_E, model):
 
-    mc_steps = sampled_Xs.shape[0]
-    n_walkers = sampled_Xs.shape[1]
-    reshaped_Xs = sampled_Xs.permute(1, 0, 2) # N_walkers, N, input_dim
-    flattened_Xs = reshaped_Xs.flatten(end_dim=1) # N_walkers * N, input_dim
-
-    return parameter_gradients(flattened_Xs, local_E, model, n_walkers, mc_steps)
+    return parameter_gradients(sampled_Xs, local_E, model, n_walkers, mc_steps)
 
 def assign_gradients_to_model(parameter_gradients, model):
     """Assign a flattened gradient vector to model parameters."""
@@ -155,11 +136,7 @@ def get_mean_energies(E):
     return torch.mean(torch.mean(E, dim=1))
 
 def get_variances(E):
-    # Variance in random walkers mean energy
-    random_walker_variance = torch.mean((torch.mean(E, axis=1) - torch.mean(E)) ** 2)
-    mean_E_trial = E.mean(dim=1)
-    var_E_trial  = torch.mean(((E - mean_E_trial[:, None]) ** 2).mean(dim=1))
-    return random_walker_variance, var_E_trial
+    return torch.mean((E - torch.mean(E)) ** 2)
 
 device = torch.device("cuda")
 cpu = torch.device("cpu")
@@ -169,15 +146,20 @@ epochs = 100000
 losses = []
 
 lr = 0.001
-n_walkers = 50
-mc_steps = 5000
+n_walkers = 4096
+mc_steps = 50
+warmup_steps = 200
 model_save_iterations = 50
+running_on_hpc = True
 
-uid = str(datetime.datetime.now()).replace(
-    ' ', '.').replace('-','').replace(':',"")
-savepath = os.path.join(os.environ['HOME'], os.path.join("training_logs", f"{uid}"))
-os.mkdir(savepath)
-model_savepath = os.path.join(savepath, "model.pth")
+if running_on_hpc:
+    uid = str(datetime.datetime.now()).replace(
+        ' ', '.').replace('-','').replace(':',"")
+    savepath = os.path.join(os.environ['HOME'], os.path.join("training_logs", f"{uid}"))
+    os.mkdir(savepath)
+    model_savepath = os.path.join(savepath, "model.pth")
+else:
+    model_savepath = ""
 
 config = {
     "lr" : lr,
@@ -189,40 +171,51 @@ config = {
 optimizer = torch.optim.Adam(model.parameters())
 
 # Training monitoring on wandb
-wandb_login(running_on_hpc=True)
+wandb_login(running_on_hpc=running_on_hpc)
 start_wandb_run(config=config, project_name="vmc")
+
+pos = torch.rand((n_walkers, 6))
 
 for i in tqdm(range(epochs)):
 
     with torch.no_grad():
-        sampled_Xs = metropolis(mc_steps, n_walkers, model.to(cpu))[500:]
+        pos = metropolis(warmup_steps, pos, n_walkers, model.to(cpu))  
+        pos = metropolis(mc_steps, pos, n_walkers, model)
 
+    # Get local energy
     E = get_local_energy(
-    sampled_Xs.to(device), model.to(device))
-    mean_E = get_mean_energies(E)
-    variances = get_variances(E.to(cpu))
-    loss = torch.abs(E_true - mean_E)
+        pos.to(device), model.to(device))
+    
+    # Get variance
+    variance = get_variances(E)
+    mean_energy = torch.mean(E)
+
+    print(
+        f"Mean energy is {mean_energy}\n"
+        f"Variance is {variance}"
+        )
+
+    loss = torch.abs(E_true - torch.mean(E))
     losses.append(loss.item())
 
-    r1 = torch.norm(sampled_Xs[:, :, :3], dim=2, keepdim=True)
-    r2 = torch.norm(sampled_Xs[:, :, 3:], dim=2, keepdim=True)
-    r12 = torch.norm(sampled_Xs[:, :, :3] - sampled_Xs[:, :, 3:], dim=2, keepdim=True)
-    grad_Xs = torch.cat([r1, r2, r12], dim=2)
+    r1 = torch.norm(pos[:, :3], dim=-1, keepdim=True)
+    r2 = torch.norm(pos[:, 3:], dim=-1, keepdim=True)
+    r12 = torch.norm(pos[:, :3] - pos[:, 3:], dim=-1, keepdim=True)
+    grad_Xs = torch.cat([r1, r2, r12], dim=-1)
 
     grads = get_parameter_gradients(
         grad_Xs.to(device), E.to(device), model)
 
-    #print(grads.shape)
     assign_gradients_to_model(grads, model)
     
     print(
-        f"Mean energy is {mean_E}\n"
+        f"Mean energy is {mean_energy}\n"
         f"Loss is {loss}\n"
-        f"Random walker variance {variances[0]}\n"
-        f"Local energy variance {variances[1]}\n")
+        f"Variance is {variance}\n")
 
     metrics = {
-            "mean_energy": mean_E,
+            "mean_energy": mean_energy,
+            "variance": variance,
             "loss": loss
         }
 
@@ -232,11 +225,10 @@ for i in tqdm(range(epochs)):
     optimizer.zero_grad()
 
     torch.cuda.empty_cache()
-    del sampled_Xs
     del E
     del grad_Xs
 
-    if (i+1) % model_save_iterations == 0:
+    if (i+1) % model_save_iterations == 0 and running_on_hpc:
         torch.save({
         'epoch': i,
         'model_state_dict': model.state_dict(),
