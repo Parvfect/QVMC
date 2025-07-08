@@ -90,9 +90,9 @@ def local_energy(positions, model):
 def get_local_energy(sampled_Xs, model):
 
     return local_energy(sampled_Xs, model)
- 
 
-def parameter_gradients(x, E, model, n_walkers, mc_steps):
+
+def get_parameter_gradients(x, E, model, sr: bool = False):
     
     fmodel, params = make_functional(model)
     # Ensure params are on the same device as the model
@@ -115,13 +115,21 @@ def parameter_gradients(x, E, model, n_walkers, mc_steps):
 
     centered_E = E - mean_E
     centered_grads = flat_grads - mean_grad
+
     grads = torch.mean(centered_grads.T * centered_E, axis=1)
     
+    if sr:
+        metric_tensor = (
+            centered_grads.T @ centered_grads) / centered_grads.shape[0]
+        delta = 1e-3
+
+        metric_tensor = metric_tensor + (delta * torch.eye(
+            metric_tensor.shape[0]).to(device))  # Sorella's trick for zero eigenvalues
+
+        inv = torch.linalg.inv(metric_tensor)
+        grads = torch.matmul(inv, grads)
+    
     return grads.reshape(n_parameters, 1)
-
-def get_parameter_gradients(sampled_Xs, local_E, model):
-
-    return parameter_gradients(sampled_Xs, local_E, model, n_walkers, mc_steps)
 
 def assign_gradients_to_model(parameter_gradients, model):
     """Assign a flattened gradient vector to model parameters."""
@@ -145,7 +153,7 @@ E_true = -2.9037243770
 epochs = 100000
 losses = []
 
-lr = 0.001
+lr = 0.0001
 n_walkers = 4096
 mc_steps = 50
 warmup_steps = 200
@@ -204,7 +212,7 @@ for i in tqdm(range(epochs)):
     grad_Xs = torch.cat([r1, r2, r12], dim=-1)
 
     grads = get_parameter_gradients(
-        grad_Xs.to(device), E.to(device), model)
+        grad_Xs.to(device), E.to(device), model, sr=True)
 
     assign_gradients_to_model(grads, model)
     
