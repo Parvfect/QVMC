@@ -47,7 +47,7 @@ def metropolis(N: int, pos: torch.tensor, n_runs: int, model):
 
 
     acceptance_ratio = accept_count / (N * n_runs)
-    print(f"Acceptance ratio: {acceptance_ratio:.4f}")
+    #print(f"Acceptance ratio: {acceptance_ratio:.4f}")
 
     return torch.cat((r1, r2), dim=1)
 
@@ -92,7 +92,7 @@ def get_local_energy(sampled_Xs, model):
     return local_energy(sampled_Xs, model)
 
 
-def get_parameter_gradients(x, E, model, sr: bool = False):
+def get_parameter_gradients(x, E, model, sr: bool = False, pc: bool = False):
     
     fmodel, params = make_functional(model)
     # Ensure params are on the same device as the model
@@ -116,18 +116,33 @@ def get_parameter_gradients(x, E, model, sr: bool = False):
     centered_E = E - mean_E
     centered_grads = flat_grads - mean_grad
 
-    grads = torch.mean(centered_grads.T * centered_E, axis=1)
+    grads = centered_grads.T * centered_E
     
     if sr:
         metric_tensor = (
-            centered_grads.T @ centered_grads) / centered_grads.shape[0]
+            centered_grads.T @ centered_grads) / centered_grads.shape[0]  # this is the effective average
         delta = 1e-3
-
+        metric_diag = torch.diag(metric_tensor)
         metric_tensor = metric_tensor + (delta * torch.eye(
             metric_tensor.shape[0]).to(device))  # Sorella's trick for zero eigenvalues
 
-        inv = torch.linalg.inv(metric_tensor)
-        grads = torch.matmul(inv, grads)
+        if pc:  # Pre-conditioning
+            outer = metric_diag.unsqueeze(0) * metric_diag.unsqueeze(1)
+            pc_matrix = 1 / torch.sqrt(outer)
+            metric_tensor = metric_tensor @ pc_matrix
+            grads = torch.mean(
+                (grads.T * torch.sqrt(metric_diag)).T, axis=1)
+        else:
+            grads = torch.mean(grads, axis=1)
+
+        #print("Inverting the pre-conditioned metric tensor")
+        grads = torch.linalg.solve(metric_tensor, grads)
+        #inv = torch.linalg.inv(metric_tensor)
+        #print("hmm")
+        #grads = torch.matmul(inv, grads)
+
+    else:
+        grads = torch.mean(grads, axis=1)
     
     return grads.reshape(n_parameters, 1)
 
@@ -146,101 +161,104 @@ def get_mean_energies(E):
 def get_variances(E):
     return torch.mean((E - torch.mean(E)) ** 2)
 
-device = torch.device("cuda")
-cpu = torch.device("cpu")
-E_true = -2.9037243770
 
-epochs = 100000
-losses = []
 
-lr = 0.0001
-n_walkers = 4096
-mc_steps = 50
-warmup_steps = 200
-model_save_iterations = 50
-running_on_hpc = True
+def main():
+    device = torch.device("cuda")
+    cpu = torch.device("cpu")
+    E_true = -2.9037243770
 
-if running_on_hpc:
-    uid = str(datetime.datetime.now()).replace(
-        ' ', '.').replace('-','').replace(':',"")
-    savepath = os.path.join(os.environ['HOME'], os.path.join("training_logs", f"{uid}"))
-    os.mkdir(savepath)
-    model_savepath = os.path.join(savepath, "model.pth")
-else:
-    model_savepath = ""
+    epochs = 100000
+    losses = []
 
-config = {
-    "lr" : lr,
-    "n_walkers": n_walkers,
-    "mc_steps": mc_steps,
-    "model_savepath": model_savepath
-}
+    lr = 1e-5
+    n_walkers = 4096
+    mc_steps = 50
+    warmup_steps = 200
+    model_save_iterations = 50
+    running_on_hpc = False
 
-optimizer = torch.optim.Adam(model.parameters())
+    if running_on_hpc:
+        uid = str(datetime.datetime.now()).replace(
+            ' ', '.').replace('-','').replace(':',"")
+        savepath = os.path.join(os.environ['HOME'], os.path.join("training_logs", f"{uid}"))
+        os.mkdir(savepath)
+        model_savepath = os.path.join(savepath, "model.pth")
+    else:
+        model_savepath = ""
 
-# Training monitoring on wandb
-wandb_login(running_on_hpc=running_on_hpc)
-start_wandb_run(config=config, project_name="vmc")
+    config = {
+        "lr" : lr,
+        "n_walkers": n_walkers,
+        "mc_steps": mc_steps,
+        "model_savepath": model_savepath
+    }
 
-pos = torch.rand((n_walkers, 6))
+    optimizer = torch.optim.Adam(model.parameters())
 
-for i in tqdm(range(epochs)):
+    # Training monitoring on wandb
+    wandb_login(running_on_hpc=running_on_hpc)
+    start_wandb_run(config=config, project_name="vmc")
 
-    with torch.no_grad():
-        pos = metropolis(warmup_steps, pos, n_walkers, model.to(cpu))  
-        pos = metropolis(mc_steps, pos, n_walkers, model)
+    pos = torch.rand((n_walkers, 6))
 
-    # Get local energy
-    E = get_local_energy(
-        pos.to(device), model.to(device))
-    
-    # Get variance
-    variance = get_variances(E)
-    mean_energy = torch.mean(E)
+    for i in tqdm(range(epochs)):
 
-    print(
-        f"Mean energy is {mean_energy}\n"
-        f"Variance is {variance}"
-        )
+        with torch.no_grad():
+            pos = metropolis(warmup_steps, pos, n_walkers, model.to(cpu))  
+            pos = metropolis(mc_steps, pos, n_walkers, model)
 
-    loss = torch.abs(E_true - torch.mean(E))
-    losses.append(loss.item())
+        # Get local energy
+        E = get_local_energy(
+            pos.to(device), model.to(device))
+        
+        # Get variance
+        variance = get_variances(E)
+        mean_energy = torch.mean(E)
 
-    r1 = torch.norm(pos[:, :3], dim=-1, keepdim=True)
-    r2 = torch.norm(pos[:, 3:], dim=-1, keepdim=True)
-    r12 = torch.norm(pos[:, :3] - pos[:, 3:], dim=-1, keepdim=True)
-    grad_Xs = torch.cat([r1, r2, r12], dim=-1)
+        print(
+            f"Mean energy is {mean_energy}\n"
+            f"Variance is {variance}"
+            )
 
-    grads = get_parameter_gradients(
-        grad_Xs.to(device), E.to(device), model, sr=True)
+        loss = torch.abs(E_true - torch.mean(E))
+        losses.append(loss.item())
 
-    assign_gradients_to_model(grads, model)
-    
-    print(
-        f"Mean energy is {mean_energy}\n"
-        f"Loss is {loss}\n"
-        f"Variance is {variance}\n")
+        r1 = torch.norm(pos[:, :3], dim=-1, keepdim=True)
+        r2 = torch.norm(pos[:, 3:], dim=-1, keepdim=True)
+        r12 = torch.norm(pos[:, :3] - pos[:, 3:], dim=-1, keepdim=True)
+        grad_Xs = torch.cat([r1, r2, r12], dim=-1)
 
-    metrics = {
-            "mean_energy": mean_energy,
-            "variance": variance,
-            "loss": loss
-        }
+        grads = get_parameter_gradients(
+            grad_Xs.to(device), E.to(device), model, sr=True, pc=False)
 
-    wandb.log(metrics)
+        assign_gradients_to_model(grads, model)
+        
+        print(
+            f"Mean energy is {mean_energy}\n"
+            f"Loss is {loss}\n"
+            f"Variance is {variance}\n")
 
-    optimizer.step()
-    optimizer.zero_grad()
+        metrics = {
+                "mean_energy": mean_energy,
+                "variance": variance,
+                "loss": loss
+            }
 
-    torch.cuda.empty_cache()
-    del E
-    del grad_Xs
+        wandb.log(metrics)
 
-    if (i+1) % model_save_iterations == 0 and running_on_hpc:
-        torch.save({
-        'epoch': i,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        }, model_savepath)
+        optimizer.step()
+        optimizer.zero_grad()
+
+        torch.cuda.empty_cache()
+        del E
+        del grad_Xs
+
+        if (i+1) % model_save_iterations == 0 and running_on_hpc:
+            torch.save({
+            'epoch': i,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            }, model_savepath)
 
 
