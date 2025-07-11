@@ -121,7 +121,7 @@ def get_parameter_gradients(x, E, model, sr: bool = False, pc: bool = False):
     if sr:
         metric_tensor = (
             centered_grads.T @ centered_grads) / centered_grads.shape[0]  # this is the effective average
-        delta = 0.04
+        delta = 1e-4
         metric_diag = torch.diag(metric_tensor)
         metric_tensor = metric_tensor + (delta * torch.eye(
             metric_tensor.shape[0]).to(device))  # Sorella's trick for zero eigenvalues
@@ -235,6 +235,7 @@ def main():
         assign_gradients_to_model(grads, model)
         
         print(
+            f"Iteration {i}\n"
             f"Mean energy is {mean_energy}\n"
             f"Loss is {loss}\n"
             f"Variance is {variance}\n")
