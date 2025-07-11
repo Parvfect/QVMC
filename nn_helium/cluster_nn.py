@@ -121,7 +121,7 @@ def get_parameter_gradients(x, E, model, sr: bool = False, pc: bool = False):
     if sr:
         metric_tensor = (
             centered_grads.T @ centered_grads) / centered_grads.shape[0]  # this is the effective average
-        delta = 1e-3
+        delta = 0.04
         metric_diag = torch.diag(metric_tensor)
         metric_tensor = metric_tensor + (delta * torch.eye(
             metric_tensor.shape[0]).to(device))  # Sorella's trick for zero eigenvalues
@@ -171,12 +171,12 @@ def main():
     epochs = 100000
     losses = []
 
-    lr = 1e-5
+    lr = 0.01
     n_walkers = 4096
     mc_steps = 50
     warmup_steps = 200
     model_save_iterations = 50
-    running_on_hpc = False
+    running_on_hpc = True
 
     if running_on_hpc:
         uid = str(datetime.datetime.now()).replace(
@@ -262,3 +262,5 @@ def main():
             }, model_savepath)
 
 
+
+main()

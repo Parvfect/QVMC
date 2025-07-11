@@ -2,7 +2,7 @@
 import torch.nn as nn
 import torch
 
-torch.set_default_dtype(torch.float64)
+#torch.set_default_dtype(torch.float64)
 
 class MLP(nn.Module):
 
