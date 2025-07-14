@@ -117,27 +117,30 @@ def get_parameter_gradients(x, E, model, sr: bool = False, pc: bool = False):
     centered_grads = flat_grads - mean_grad
 
     grads = centered_grads.T * centered_E
+    #grads = grads[:-1, :-1]
     
     if sr:
         metric_tensor = (
             centered_grads.T @ centered_grads) / centered_grads.shape[0]  # this is the effective average
-        delta = 1e-4
-        metric_diag = torch.diag(metric_tensor)
+        #metric_tensor[:-1, :-1] = 0.04
+        delta = 0.04
         metric_tensor = metric_tensor + (delta * torch.eye(
             metric_tensor.shape[0]).to(device))  # Sorella's trick for zero eigenvalues
-
+        metric_diag = torch.diag(metric_tensor)
+        
         if pc:  # Pre-conditioning
             outer = metric_diag.unsqueeze(0) * metric_diag.unsqueeze(1)
-            pc_matrix = 1 / torch.sqrt(outer)
-            metric_tensor = metric_tensor @ pc_matrix
+            metric_tensor = metric_tensor / torch.sqrt(outer)
             grads = torch.mean(
                 (grads.T * torch.sqrt(metric_diag)).T, axis=1)
         else:
             grads = torch.mean(grads, axis=1)
 
         #print("Inverting the pre-conditioned metric tensor")
+        if torch.linalg.det(metric_tensor) == 0:
+            print("cannot be inverted - breaking")
+            exit()
         grads = torch.linalg.solve(metric_tensor, grads)
-        #inv = torch.linalg.inv(metric_tensor)
         #print("hmm")
         #grads = torch.matmul(inv, grads)
 
@@ -176,7 +179,7 @@ def main():
     mc_steps = 50
     warmup_steps = 200
     model_save_iterations = 50
-    running_on_hpc = True
+    running_on_hpc = False
 
     if running_on_hpc:
         uid = str(datetime.datetime.now()).replace(
@@ -215,11 +218,6 @@ def main():
         # Get variance
         variance = get_variances(E)
         mean_energy = torch.mean(E)
-
-        print(
-            f"Mean energy is {mean_energy}\n"
-            f"Variance is {variance}"
-            )
 
         loss = torch.abs(E_true - torch.mean(E))
         losses.append(loss.item())
