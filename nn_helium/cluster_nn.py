@@ -10,13 +10,15 @@ from nn import psi_nn, model
 import datetime
 
 
-def metropolis(N: int, pos: torch.tensor, n_runs: int, model):  
+def metropolis(N: int, pos: torch.tensor, n_runs: int, model: torch.nn, keep_mc_steps: bool):  
     
     L = 0.5
     
     r1 = pos[:, :3]
     r2 = pos[:, 3:]
     accept_count = 0
+    if keep_mc_steps:
+        sampled_Xs = []
 
     for _ in range(N):
         chose = torch.rand(n_runs, 1)
@@ -92,7 +94,9 @@ def get_local_energy(sampled_Xs, model):
     return local_energy(sampled_Xs, model)
 
 
-def get_parameter_gradients(x, E, model, sr: bool = False, pc: bool = False):
+def get_parameter_gradients(
+        x: torch.tensor, E: torch.tensor, model: torch.nn,
+        delta_I: float, optimization_type: int, pc: bool = False):
     
     fmodel, params = make_functional(model)
     # Ensure params are on the same device as the model
@@ -116,15 +120,36 @@ def get_parameter_gradients(x, E, model, sr: bool = False, pc: bool = False):
     centered_E = E - mean_E
     centered_grads = flat_grads - mean_grad
 
+    if optimization_type == 2:  # MinSR
+        metric_tensor = (
+        centered_grads @ centered_grads.T) / centered_grads.shape[0]
+        metric_tensor = metric_tensor + (delta_I * torch.eye(
+            metric_tensor.shape[0]).to(device))  # Sorella's trick for zero eigenvalues
+
+        #if torch.linalg.det(metric_tensor) == 0:
+        #    print("Cannot be inverted - breaking")
+        #    exit()
+        
+        inv = torch.linalg.solve(metric_tensor, torch.eye(metric_tensor.shape[0]).to(device))
+        #inv = torch.linalg.inv(metric_tensor)
+        #if pc:  # Pre-conditioning
+        #    outer = metric_diag.unsqueeze(0) * metric_diag.unsqueeze(1)
+        #    metric_tensor = metric_tensor / torch.sqrt(outer)
+        #    grads = torch.mean(-
+        #        (grads.T * torch.sqrt(metric_diag)).T, axis=1)
+        grads = centered_grads.T @ inv * centered_E
+        grads = torch.mean(grads, axis=1)
+        
+        return grads.reshape(n_parameters, 1)
+
+
     grads = centered_grads.T * centered_E
     #grads = grads[:-1, :-1]
-    
-    if sr:
+
+    if optimization_type == 1:
         metric_tensor = (
-            centered_grads.T @ centered_grads) / centered_grads.shape[0]  # this is the effective average
-        #metric_tensor[:-1, :-1] = 0.04
-        delta = 0.04
-        metric_tensor = metric_tensor + (delta * torch.eye(
+            centered_grads.T @ centered_grads) / centered_grads.shape[0]
+        metric_tensor = metric_tensor + (delta_I * torch.eye(
             metric_tensor.shape[0]).to(device))  # Sorella's trick for zero eigenvalues
         metric_diag = torch.diag(metric_tensor)
         
@@ -136,13 +161,7 @@ def get_parameter_gradients(x, E, model, sr: bool = False, pc: bool = False):
         else:
             grads = torch.mean(grads, axis=1)
 
-        #print("Inverting the pre-conditioned metric tensor")
-        if torch.linalg.det(metric_tensor) == 0:
-            print("cannot be inverted - breaking")
-            exit()
         grads = torch.linalg.solve(metric_tensor, grads)
-        #print("hmm")
-        #grads = torch.matmul(inv, grads)
 
     else:
         grads = torch.mean(grads, axis=1)
@@ -165,21 +184,17 @@ def get_variances(E):
     return torch.mean((E - torch.mean(E)) ** 2)
 
 
-
-def main():
+def main(
+        epochs:int, warmup_steps:int, mc_steps:int, n_walkers:int, optimization_type:int,
+        lr: float, delta_I: float, preconditioned: bool, keep_mc_steps: bool, running_on_hpc: bool,
+        model_save_iterations: int, saved_model: bool, saved_model_path: str
+    ):
+    
     device = torch.device("cuda")
     cpu = torch.device("cpu")
     E_true = -2.9037243770
 
-    epochs = 100000
     losses = []
-
-    lr = 0.01
-    n_walkers = 4096
-    mc_steps = 50
-    warmup_steps = 200
-    model_save_iterations = 50
-    running_on_hpc = False
 
     if running_on_hpc:
         uid = str(datetime.datetime.now()).replace(
@@ -194,6 +209,10 @@ def main():
         "lr" : lr,
         "n_walkers": n_walkers,
         "mc_steps": mc_steps,
+        "preconditioned": preconditioned,
+        "delta_I": delta_I,
+        "keep_mc_steps": keep_mc_steps,
+        "optimization_type": optimization_type,
         "model_savepath": model_savepath
     }
 
@@ -208,14 +227,12 @@ def main():
     for i in tqdm(range(epochs)):
 
         with torch.no_grad():
-            pos = metropolis(warmup_steps, pos, n_walkers, model.to(cpu))  
-            pos = metropolis(mc_steps, pos, n_walkers, model)
+            pos = metropolis(warmup_steps, pos, n_walkers, model.to(cpu), keep_mc_steps=False)  
+            pos = metropolis(mc_steps, pos, n_walkers, model, keep_mc_steps=keep_mc_steps)
 
-        # Get local energy
         E = get_local_energy(
             pos.to(device), model.to(device))
         
-        # Get variance
         variance = get_variances(E)
         mean_energy = torch.mean(E)
 
@@ -228,7 +245,9 @@ def main():
         grad_Xs = torch.cat([r1, r2, r12], dim=-1)
 
         grads = get_parameter_gradients(
-            grad_Xs.to(device), E.to(device), model, sr=True, pc=False)
+            x=grad_Xs.to(device), E=E.to(device), model=model,
+            optimization_type=optimization_type, delta_I=delta_I,
+            pc=preconditioned)
 
         assign_gradients_to_model(grads, model)
         
@@ -259,7 +278,3 @@ def main():
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             }, model_savepath)
-
-
-
-main()
