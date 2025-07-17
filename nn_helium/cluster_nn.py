@@ -118,7 +118,7 @@ def get_parameter_gradients(
     mean_E = torch.mean(E)
 
     centered_E = E - mean_E
-    centered_grads = flat_grads - mean_grad
+    centered_grads = flat_grads - mean_grad # Removed centering of grads here
 
     if optimization_type == 2:  # MinSR
         metric_tensor = (
@@ -149,17 +149,22 @@ def get_parameter_gradients(
     if optimization_type == 1:
         metric_tensor = (
             centered_grads.T @ centered_grads) / centered_grads.shape[0]
-        metric_tensor = metric_tensor + (delta_I * torch.eye(
-            metric_tensor.shape[0]).to(device))  # Sorella's trick for zero eigenvalues
+        
         metric_diag = torch.diag(metric_tensor)
         
         if pc:  # Pre-conditioning
             outer = metric_diag.unsqueeze(0) * metric_diag.unsqueeze(1)
-            metric_tensor = metric_tensor / torch.sqrt(outer)
+            pc_matrix = 1 / torch.sqrt(outer)
+            metric_tensor = metric_tensor * pc_matrix
             grads = torch.mean(
                 (grads.T * torch.sqrt(metric_diag)).T, axis=1)
         else:
             grads = torch.mean(grads, axis=1)
+
+        
+        metric_tensor = metric_tensor + (delta_I * torch.eye(
+            metric_tensor.shape[0]).to(device))  # Sorella's trick for zero eigenvalues
+        
 
         grads = torch.linalg.solve(metric_tensor, grads)
 
@@ -205,16 +210,23 @@ def main(
     else:
         model_savepath = ""
 
+
+    total_params = sum(p.numel() for p in model.parameters())
+
     config = {
         "lr" : lr,
         "n_walkers": n_walkers,
         "mc_steps": mc_steps,
         "preconditioned": preconditioned,
         "delta_I": delta_I,
+        "n_parameters": total_params,
         "keep_mc_steps": keep_mc_steps,
         "optimization_type": optimization_type,
         "model_savepath": model_savepath
     }
+
+    print(config)
+    print()
 
     optimizer = torch.optim.Adam(model.parameters())
 
@@ -278,3 +290,11 @@ def main(
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             }, model_savepath)
+
+
+        if i == 200:
+            torch.save({
+            'epoch': i,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            }, "110_epoch_sr_pc.pth")

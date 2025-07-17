@@ -42,7 +42,7 @@ def init_xavier_uniform(module):
 
 input_dim = 3
 n_hidden_layers = 3
-hidden_dim = 32
+hidden_dim = 64
 output_size = 1
 
 model = MLP(
