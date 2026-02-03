@@ -4,3 +4,14 @@ wandb_api_key.txt
 **/Papers
 **/updates
 *.pth
+ferminet
+fermi
+ferminet*
+fork
+netket
+papers
+updates
+.ipynb_checkpoints/
+histograms.ipynb
+wandb
+env

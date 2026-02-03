@@ -24,10 +24,13 @@ parser.add_argument('--model_save_iterations', type=int)
 parser.add_argument('--lr', type=float)
 parser.add_argument('--saved_model', action='store_true', help='Load from saved model')
 parser.add_argument('--saved_model_path', type=str, help="Saved model path")
+parser.add_argument(
+    '--minibatches', action='store_true', help="Average parameter gradients over minibatches")
+parser.add_argument('--minibatch_size', type=float)
 
 
 parser.set_defaults(
-    epochs=100000, warmup_steps=200, mc_steps=50, n_walkers=4096, running_on_hpc=False, optimization_type=0, preconditioned=False, delta_I=0.04, keep_mc_steps=False, lr=0.01, saved_model=False, saved_model_path="", model_save_iterations=50
+    epochs=100000, warmup_steps=200, mc_steps=50, n_walkers=4096, running_on_hpc=False, optimization_type=0, preconditioned=False, delta_I=1e-4, keep_mc_steps=False, lr=0.01, saved_model=False, saved_model_path="", model_save_iterations=50, minibatches=False, minibatch_size=256
     )
 
 args = parser.parse_args()
@@ -46,10 +49,12 @@ if __name__ == '__main__':
     model_save_iterations = args.model_save_iterations
     saved_model = args.saved_model
     saved_model_path = args.saved_model_path
+    minibatches = args.minibatches
+    minibatch_size = int(args.minibatch_size)
 
     main(
         epochs=epochs, warmup_steps=warmup_steps, mc_steps=mc_steps,
         n_walkers=n_walkers, optimization_type=optimization_type, lr=lr,
         delta_I=delta_I, preconditioned=preconditioned, keep_mc_steps=keep_mc_steps,
-        running_on_hpc=running_on_hpc, model_save_iterations=model_save_iterations, saved_model=saved_model, saved_model_path=saved_model_path
+        running_on_hpc=running_on_hpc, model_save_iterations=model_save_iterations, saved_model=saved_model, saved_model_path=saved_model_path, minibatches=minibatches, minibatch_size=minibatch_size
     )

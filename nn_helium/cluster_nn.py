@@ -3,10 +3,10 @@ import torch
 from torch import vmap
 from functorch import make_functional, vmap, grad
 from tqdm import tqdm
-from training_monitoring import wandb_login, start_wandb_run
+from nn_helium.training_monitoring import wandb_login, start_wandb_run
 import os
 import wandb
-from nn import psi_nn, model
+from nn_helium.nn import psi_nn, model
 import datetime
 
 
@@ -118,7 +118,7 @@ def get_parameter_gradients(
     mean_E = torch.mean(E)
 
     centered_E = E - mean_E
-    centered_grads = flat_grads - mean_grad # Removed centering of grads here
+    centered_grads = flat_grads # Removed centering of grads here
 
     if optimization_type == 2:  # MinSR
         metric_tensor = (
@@ -126,9 +126,8 @@ def get_parameter_gradients(
         metric_tensor = metric_tensor + (delta_I * torch.eye(
             metric_tensor.shape[0]).to(device))  # Sorella's trick for zero eigenvalues
 
-        #if torch.linalg.det(metric_tensor) == 0:
-        #    print("Cannot be inverted - breaking")
-        #    exit()
+
+        # Divisions here for averaging - figure it out..
         
         inv = torch.linalg.solve(metric_tensor, torch.eye(metric_tensor.shape[0]).to(device))
         #inv = torch.linalg.inv(metric_tensor)
@@ -137,14 +136,12 @@ def get_parameter_gradients(
         #    metric_tensor = metric_tensor / torch.sqrt(outer)
         #    grads = torch.mean(-
         #        (grads.T * torch.sqrt(metric_diag)).T, axis=1)
-        grads = centered_grads.T @ inv * centered_E
-        grads = torch.mean(grads, axis=1)
+        grads = centered_grads.T @ ((inv @ centered_E) / centered_E.shape[0])
+        #grads = torch.mean(grads, axis=1)
         
         return grads.reshape(n_parameters, 1)
 
-
-    grads = centered_grads.T * centered_E
-    #grads = grads[:-1, :-1]
+    grads = centered_grads.T @ centered_E / centered_E.shape[0]
 
     if optimization_type == 1:
         metric_tensor = (
@@ -159,7 +156,8 @@ def get_parameter_gradients(
             grads = torch.mean(
                 (grads.T * torch.sqrt(metric_diag)).T, axis=1)
         else:
-            grads = torch.mean(grads, axis=1)
+            #grads = torch.mean(grads, axis=1)
+            grads = grads
 
         
         metric_tensor = metric_tensor + (delta_I * torch.eye(
@@ -169,17 +167,23 @@ def get_parameter_gradients(
         grads = torch.linalg.solve(metric_tensor, grads)
 
     else:
-        grads = torch.mean(grads, axis=1)
+        grads = grads
+        #grads = centered_grads.T * centered_E
+        #grads = torch.mean(grads, axis=1)
     
     return grads.reshape(n_parameters, 1)
 
-def assign_gradients_to_model(parameter_gradients, model):
+def assign_gradients_to_model(parameter_gradients, learning_rate, model, optimization_type):
     """Assign a flattened gradient vector to model parameters."""
     pointer = 0
-    for p in model.parameters():
-        numel = p.numel()
-        p.grad = parameter_gradients[pointer:pointer + numel].view_as(p).clone()
-        pointer += numel
+    with torch.no_grad():
+        for p in model.parameters():
+            numel = p.numel()
+            update = parameter_gradients[pointer:pointer + numel].view_as(p)
+            if optimization_type == 0:
+                p.grad = update.clone()
+            p -= learning_rate * update
+            pointer += numel
     return 
 
 def get_mean_energies(E):
@@ -192,7 +196,7 @@ def get_variances(E):
 def main(
         epochs:int, warmup_steps:int, mc_steps:int, n_walkers:int, optimization_type:int,
         lr: float, delta_I: float, preconditioned: bool, keep_mc_steps: bool, running_on_hpc: bool,
-        model_save_iterations: int, saved_model: bool, saved_model_path: str
+        model_save_iterations: int, saved_model: bool, saved_model_path: str, minibatches: bool, minibatch_size: int
     ):
     
     device = torch.device("cuda")
@@ -222,7 +226,9 @@ def main(
         "n_parameters": total_params,
         "keep_mc_steps": keep_mc_steps,
         "optimization_type": optimization_type,
-        "model_savepath": model_savepath
+        "model_savepath": model_savepath,
+        "minibatches": minibatches,
+        "minibatch_size": minibatch_size
     }
 
     print(config)
@@ -236,7 +242,7 @@ def main(
 
     pos = torch.rand((n_walkers, 6))
 
-    for i in tqdm(range(epochs)):
+    for epoch in tqdm(range(epochs)):
 
         with torch.no_grad():
             pos = metropolis(warmup_steps, pos, n_walkers, model.to(cpu), keep_mc_steps=False)  
@@ -254,17 +260,39 @@ def main(
         r1 = torch.norm(pos[:, :3], dim=-1, keepdim=True)
         r2 = torch.norm(pos[:, 3:], dim=-1, keepdim=True)
         r12 = torch.norm(pos[:, :3] - pos[:, 3:], dim=-1, keepdim=True)
-        grad_Xs = torch.cat([r1, r2, r12], dim=-1)
+        Xs = torch.cat([r1, r2, r12], dim=-1)  # Xs for the parameter_grads
+        n_samples = r1.shape[1]
+        n_params = sum(p.numel() for p in model.parameters())
 
-        grads = get_parameter_gradients(
-            x=grad_Xs.to(device), E=E.to(device), model=model,
-            optimization_type=optimization_type, delta_I=delta_I,
-            pc=preconditioned)
 
-        assign_gradients_to_model(grads, model)
+        if minibatches:
+            n_iterations = int(n_walkers / minibatch_size)
+            parameter_grads = torch.zeros(n_params, 1).to(device)
+
+            for i in range(n_iterations):
+                ptr = int(i * minibatch_size)
+
+                Xs_i = Xs[ptr: ptr + minibatch_size, :]
+                E_i = E[ptr: ptr + minibatch_size]
+
+                parameter_grads += get_parameter_gradients(
+                    x=Xs_i.to(device), E=E_i.to(device), model=model,
+                    optimization_type=optimization_type, delta_I=delta_I,
+                    pc=preconditioned
+                )
+
+            parameter_grads /= n_iterations
+
+        else:
+            parameter_grads = get_parameter_gradients(
+                x=Xs.to(device), E=E.to(device), model=model,
+                optimization_type=optimization_type, delta_I=delta_I,
+                pc=preconditioned)
+            
+        assign_gradients_to_model(parameter_grads, lr, model, optimization_type)
         
         print(
-            f"Iteration {i}\n"
+            f"Iteration {epoch}\n"
             f"Mean energy is {mean_energy}\n"
             f"Loss is {loss}\n"
             f"Variance is {variance}\n")
@@ -277,14 +305,15 @@ def main(
 
         wandb.log(metrics)
 
-        optimizer.step()
-        optimizer.zero_grad()
+        if optimization_type == 0:
+            optimizer.step()
+            optimizer.zero_grad()
 
         torch.cuda.empty_cache()
         del E
-        del grad_Xs
+        del parameter_grads
 
-        if (i+1) % model_save_iterations == 0 and running_on_hpc:
+        if (epoch + 1) % model_save_iterations == 0 and running_on_hpc:
             torch.save({
             'epoch': i,
             'model_state_dict': model.state_dict(),
@@ -292,7 +321,7 @@ def main(
             }, model_savepath)
 
 
-        if i == 200:
+        if epoch == 200:
             torch.save({
             'epoch': i,
             'model_state_dict': model.state_dict(),
