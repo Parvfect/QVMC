@@ -9,7 +9,8 @@ This repository contains code and resources for implementing and experimenting w
 ## Innards
 
 - `helium_analytical`: Optimization of a 4-parameter (analtyical) helium model, achieving results within 0.003 au of the true energy (David, Carl W. "Compact Singlet S Helium Wave functions (corrected)." (2006).). Implementation of Metropolis sampling, analytical gradients and energy expressions and optimization using ADAM.
-- `nn_helium`: Initial implementation of a neural network ansatz for the helium atom
+- `nn_helium`: Simple neural network ansatz for the helium atom
+- 'nnqs_jax' : Starting simple general implementation for NQS in JAX. Ground state, TVMC, etc
 
 ## Getting Started
 
