@@ -31,6 +31,6 @@ def get_local_energy_fn(f):
         return result - 0.5 * jnp.sum(primal ** 2)
 
     def te(params, x):
-        return pe(x) + 0.5 * _lapl_over_f(params, x)
+        return pe(x) + _lapl_over_f(params, x)
     
     return jax.vmap(te, in_axes=(None, 0), out_axes=(0))

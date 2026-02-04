@@ -71,7 +71,7 @@ def psi_nn(
     nn_out = model.apply(params, features)
 
     # Hydrogenic term (example: Z=2)
-    hydrogenic = -2.0 * jnp.sum(r, axis=1)
+    hydrogenic = -1.0 * jnp.sum(r, axis=1)
 
     # Jastrow term (example form)
     jastrow = jnp.sum(
