@@ -7,11 +7,38 @@ from jax import lax
 
 
 
-def get_local_energy_fn(f):
+def get_local_energy_fn(f, Z, nelectrons):
     
     def pe(x):
-        r = jnp.linalg.norm(x)
-        return -1/r
+        """
+        Full Coulomb potential energy for a single atom at the origin.
+
+        x: (3 * nelectrons,)
+        returns: scalar
+        """
+
+        # (N, 3)
+        R = x.reshape(nelectrons, 3)
+
+        # -------------------------
+        # Electron–nucleus term
+        # -------------------------
+        r_i = jnp.linalg.norm(R, axis=-1)      # (N,)
+        V_en = -Z * jnp.sum(1.0 / r_i)         # scalar
+
+        # -------------------------
+        # Electron–electron term
+        # -------------------------
+        diff = R[:, None, :] - R[None, :, :]   # (N, N, 3)
+        dist = jnp.linalg.norm(diff, axis=-1)  # (N, N)
+
+        # keep i < j only
+        i, j = jnp.triu_indices(nelectrons, k=1)
+        r_ij = dist[i, j]                      # (n_pairs,)
+
+        V_ee = jnp.sum(1.0 / r_ij)             # scalar
+
+        return V_en + V_ee
     
     def _lapl_over_f(params, data):
         n = data.shape[0]

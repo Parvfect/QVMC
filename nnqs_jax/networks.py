@@ -51,35 +51,49 @@ def psi_nn(
     model,
     x,
     n_particles,
-    dim
+    dim,
+    Z
 ):
     """
-    x: (batch, n_particles * dim)
+    x: (n_particles * dim,)
+    returns: scalar (log ψ)
     """
 
-    r, rij = radial_and_pairwise_features(x, n_particles, dim)
+    # -------------------------
+    # Geometric features
+    # -------------------------
+    r, rij = radial_and_pairwise_features(
+        x, n_particles, dim)
+    # r   : (N, 1)
+    # rij : (N_pairs, 1)
 
+    # -------------------------
     # Flatten features for NN
+    # -------------------------
     features = jnp.concatenate(
         [
-            r.reshape(r.shape[0], -1),
-            rij.reshape(rij.shape[0], -1),
+            r.reshape(-1),     # (N,)
+            rij.reshape(-1),   # (N_pairs,)
         ],
-        axis=1,
-    )
+        axis=0,
+    )                          # (N + N_pairs,)
 
-    nn_out = model.apply(params, features)
+    # NN output (assumed scalar)
+    nn_out = jnp.squeeze(model(params, features))
 
-    # Hydrogenic term (example: Z=2)
-    hydrogenic = -1.0 * jnp.sum(r, axis=1)
+    # -------------------------
+    # Physics terms
+    # -------------------------
 
-    # Jastrow term (example form)
+    # Electron–nucleus (example Z=1)
+    hydrogenic = -Z * jnp.sum(r)        # scalar
+
+    # Electron–electron Jastrow (example form)
     jastrow = jnp.sum(
-        rij / (2.0 * (1.0 + 0.5 * rij)),
-        axis=1,
-    )
+        rij / (2.0 * (1.0 + 0.5 * rij))
+    )                                     # scalar
 
-    return hydrogenic + jastrow + jnp.squeeze(nn_out)
+    return nn_out + hydrogenic + jastrow
 
 
 def psi_nn_complex(
