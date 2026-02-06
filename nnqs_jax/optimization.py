@@ -1,17 +1,32 @@
 
+import jax
+import jax.numpy as jnp
 
 
-## SR
+def get_energy_grads_fn(local_energy_fn, f_b):
+
+    def energy_loss(params, data):
+        eloc = local_energy_fn(params, data)   # (B,)
+        return jnp.mean(eloc)
 
 
-"""
-1. We get the local energy using jvp - 1.5 h
-1. First we go pure ground state without SR (ADAM) - 1 h (network stuff, loss grads, any sampling mistakes) - 1.5 h
-2. Second we get the SR and psuedoinvert it and go towards the ground state like that - 1 h
-3. We create our many sample limit for TVMC and update the state in that fashion - 1.5 h
-4. We do very small   
-4. We think about the phase tracking and how that works with the fisher
-5. We think about the complex network case
-We get dlogpsi/dtheta as we collect samples (will have to use the same procedure for the O computation)
-5. 
-"""
+    def energy_grads(params, data):
+        # ----- forward pass -----
+        eloc = local_energy_fn(params, data)          # (B,)
+        loss = jnp.mean(eloc)
+        diff = eloc - loss                         # (B,)
+
+        # ----- log ψ -----
+        log_psi = lambda p: jnp.log(f_b(p, data))  # (B,)
+
+        # ----- VJP -----
+        _, vjp_fn = jax.vjp(log_psi, params)
+
+        # Contract batch dimension first
+        cotangent = diff / diff.shape[0]            # (B,)
+
+        grads = vjp_fn(cotangent)[0]
+
+        return loss, grads
+
+    return energy_grads

@@ -40,11 +40,12 @@ def get_local_energy_fn(f, Z, nelectrons):
 
         return V_en + V_ee
     
+    """
     def _lapl_over_f(params, data):
         n = data.shape[0]
         eye = jnp.eye(n)
 
-        grad_f = jax.grad(f, argnums=1)
+        grad_f = jax.grad(f, argnums=1, holomorphic=True)
         
         def grad_f_closure(x):
             return grad_f(params, x)
@@ -56,6 +57,48 @@ def get_local_energy_fn(f, Z, nelectrons):
         result = -0.5 * lax.fori_loop(
             0, n, lambda i, val: val + hessian_diagonal(i), 0.0)
         return result - 0.5 * jnp.sum(primal ** 2)
+    """
+    
+    def _lapl_over_f(params, data):
+        """
+        Computes (∇² ψ) / ψ using explicit real/imag decomposition.
+        """
+        n = data.shape[0]
+        eye = jnp.eye(n)
+
+        # --- Split psi into real and imaginary parts ---
+        def psi_real(params, x):
+            return jnp.real(f(params, x))
+
+        def psi_imag(params, x):
+            return jnp.imag(f(params, x))
+
+        # --- Gradients ---
+        grad_u = jax.grad(psi_real, argnums=1)
+        grad_v = jax.grad(psi_imag, argnums=1)
+
+        def grad_u_closure(x):
+            return grad_u(params, x)
+
+        def grad_v_closure(x):
+            return grad_v(params, x)
+
+        u, du = jax.linearize(grad_u_closure, data)
+        v, dv = jax.linearize(grad_v_closure, data)
+
+        # --- Hessian diagonals ---
+        hess_u = lambda i: du(eye[i])[i]
+        hess_v = lambda i: dv(eye[i])[i]
+
+        lap_u = lax.fori_loop(0, n, lambda i, val: val + hess_u(i), 0.0)
+        lap_v = lax.fori_loop(0, n, lambda i, val: val + hess_v(i), 0.0)
+
+        # --- Recombine ---
+        psi = f(params, data)
+        grad_psi = u + 1j * v
+        lap_psi = lap_u + 1j * lap_v
+
+        return -0.5 * lap_psi / psi
 
     def te(params, x):
         return pe(x) + _lapl_over_f(params, x)
