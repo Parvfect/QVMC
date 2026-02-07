@@ -9,14 +9,13 @@ def mh_accept(x1, x2, lp_1, lp_2, ratio, key, num_accepts):
   key, subkey = jax.random.split(key)
   rnd = jnp.log(jax.random.uniform(subkey, shape=ratio.shape))
   cond = ratio > rnd
-  cond = cond[:, None]
-  x_new = jnp.where(cond, x2, x1)
-  lp_new = jnp.where(cond, lp_2, lp_1)
+  x_new = jnp.where(cond[:, None], x2, x1)
+  lp_new = jnp.where(cond[:, None], lp_2, lp_1)
   num_accepts += jnp.sum(cond)
   return x_new, key, lp_new, num_accepts
 
 def metropolis_step(
-      params, f, data, key, mcmc_width=0.12):
+      params, f, data, key, mcmc_width=0.02):
     """
     Uniform stepping MCMC sampling using the metropolis algorithm
     
@@ -37,12 +36,12 @@ def metropolis_step(
       x2 = x1 + mcmc_width * jax.random.normal(
         subkey, shape=x1.shape)
 
-      lp_1 = 2.0 * f(params, x1)
-      lp_2 = 2.0 * f(params, x2)
-      ratio = lp_2 - lp_1
+      logp_1 = 2.0 * jnp.log(jnp.abs(f(params, x1)))
+      logp_2 = 2.0 * jnp.log(jnp.abs(f(params, x2)))
+      log_ratio = logp_2 - logp_1
       
       x_new, key, lp_new, num_accepts = mh_accept(
-        x1, x2, lp_1, lp_2, ratio, key, num_accepts)
+        x1, x2, logp_1, logp_2, log_ratio, key, num_accepts)
       
       return x_new, key, num_accepts
       
