@@ -25,32 +25,36 @@ def metropolis_step(
     :param key: PRNG key
     :param mcmc_width: MCMC width
     """
+
+    def metropolis(params, data, key, mcmc_width):
+      
+      n_steps = 10
+
+      def step_fn(i, carry):
+        data, key, num_accepts = carry
+        key, subkey = jax.random.split(key)
+
+        x1 = data
+        x2 = x1 + mcmc_width * jax.random.normal(
+          subkey, shape=x1.shape)
+
+        logp_1 = 2.0 * jnp.log(jnp.abs(f(params, x1)))
+        logp_2 = 2.0 * jnp.log(jnp.abs(f(params, x2)))
+        log_ratio = logp_2 - logp_1
+        
+        x_new, key, lp_new, num_accepts = mh_accept(
+          x1, x2, logp_1, logp_2, log_ratio, key, num_accepts)
+        
+        return x_new, key, num_accepts
+        
+      new_data, key, num_accepts = lax.fori_loop(
+          0, n_steps, step_fn, (data, key, jnp.array(0))
+      )
+      pmove = num_accepts / (n_steps * data.shape[0])
+
+      return new_data, pmove
     
-    n_steps = 10
-
-    def step_fn(i, carry):
-      data, key, num_accepts = carry
-      key, subkey = jax.random.split(key)
-
-      x1 = data
-      x2 = x1 + mcmc_width * jax.random.normal(
-        subkey, shape=x1.shape)
-
-      logp_1 = 2.0 * jnp.log(jnp.abs(f(params, x1)))
-      logp_2 = 2.0 * jnp.log(jnp.abs(f(params, x2)))
-      log_ratio = logp_2 - logp_1
-      
-      x_new, key, lp_new, num_accepts = mh_accept(
-        x1, x2, logp_1, logp_2, log_ratio, key, num_accepts)
-      
-      return x_new, key, num_accepts
-      
-    new_data, key, num_accepts = lax.fori_loop(
-        0, n_steps, step_fn, (data, key, jnp.array(0))
-    )
-    pmove = num_accepts / (n_steps * data.shape[0])
-
-    return new_data, pmove
+    return jax.jit(metropolis)
 
 def update_mcmc_width(
     t: int,

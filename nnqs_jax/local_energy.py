@@ -100,10 +100,10 @@ def get_local_energy_fn(f, Z, nelectrons):
 
         # --- Split psi into real and imaginary parts ---
         def psi_real(params, x):
-            return jnp.real(f(params, x))
+            return jnp.real(jnp.log(f(params, x)))
 
         def psi_imag(params, x):
-            return jnp.imag(f(params, x))
+            return jnp.imag(jnp.log(f(params, x)))
 
         # --- Gradients ---
         grad_u = jax.grad(psi_real, argnums=1)
@@ -125,14 +125,18 @@ def get_local_energy_fn(f, Z, nelectrons):
         lap_u = lax.fori_loop(0, n, lambda i, val: val + hess_u(i), 0.0)
         lap_v = lax.fori_loop(0, n, lambda i, val: val + hess_v(i), 0.0)
 
-        # --- Recombine ---
-        psi = f(params, data)
-        grad_psi = u + 1j * v
-        lap_psi = lap_u + 1j * lap_v
+        lap = lax.fori_loop(
+            0, n, lambda i, val: val + hess_u(i) + 1j * hess_v(i), 0.0)
 
-        return -0.5 * lap_psi / psi
+        # --- Recombine ---
+        result = -0.5 * lap
+        result -= 0.5 * jnp.sum(u ** 2)
+        result += 0.5 * jnp.sum(v ** 2)
+        result -= 1j * jnp.sum(u * v)
+        
+        return result
 
     def te(params, x):
         return pe(x) + _lapl_over_f(params, x)
     
-    return jax.vmap(te, in_axes=(None, 0))
+    return jax.jit(jax.vmap(te, in_axes=(None, 0)))
