@@ -7,6 +7,64 @@ from local_energy import get_local_energy_fn
 import matplotlib.pyplot as plt
 from local_energy import get_local_energy_fn
 
+
+"""
+Time-Dependent Variational Monte Carlo (t-VMC) for Hydrogen 1s-2s Superposition
+
+This program simulates the quantum dynamics of a coherent superposition of hydrogen's
+ground state (1s) and first excited state (2s) using time-dependent variational 
+Monte Carlo methods.
+
+Physical System
+---------------
+The quantum state is: |ψ(θ)⟩ = 1/√2 (|ψ₁ₛ⟩ + |ψ₂ₛ⟩ e^(-iθ))
+
+where θ(t) is a time-dependent variational parameter controlling the relative phase
+between the two energy eigenstates. As the system evolves, the phase oscillates at
+the Bohr frequency ω = E₂ - E₁, causing periodic oscillations in observables like
+the expectation value of position ⟨r⟩.
+
+Method
+------
+Uses the time-dependent variational principle (t-VMC):
+    S θ̇ = -iF
+
+where:
+- S is the quantum geometric tensor (Fubini-Study metric)
+- F is the energy gradient (force term)
+- θ̇ is integrated using RK4 (4th order Runge-Kutta)
+
+Monte Carlo sampling is used to evaluate expectation values over 3D position space,
+avoiding the need for expensive grid-based integration.
+
+Expected Results
+----------------
+For the hydrogen 1s-2s superposition:
+- Energy: ⟨E⟩ = -0.3125 Hartree (constant, conserved)
+- Phase evolution: θ̇ = E₂ - E₁ = 0.375 a.u. (constant)
+- Observable oscillations: ⟨r⟩(t) oscillates at frequency ω = 0.375 a.u.
+- Period: T = 2π/ω ≈ 16.75 a.u. of time
+
+The program validates the analytical theory by:
+1. Verifying θ̇ remains constant at 0.375 a.u.
+2. Extracting oscillation frequency from ⟨r⟩(t) via FFT
+3. Comparing numerical frequency to analytical prediction
+
+Outputs
+-------
+- Time series plot of ⟨r⟩(t) showing quantum oscillations
+- Frequency spectrum (FFT) identifying dominant oscillation frequency
+- Comparison of numerical vs analytical frequencies
+- Energy conservation check
+
+Notes
+-----
+- All quantities in atomic units (ℏ = m_e = e = 1)
+- MC sampling fixed at t=0 (does not evolve with density)
+- Sampling bias corrected by using broad initial distribution
+"""
+
+
 # Energy levels of H
 E1 = -0.5
 E2 = -0.125

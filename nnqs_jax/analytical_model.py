@@ -7,6 +7,67 @@ from local_energy import get_local_energy_fn
 import matplotlib.pyplot as plt
 from local_energy import get_local_energy_fn
 
+"""
+Monte Carlo Sampling Validation for Hydrogen 1s-2s Superposition Dynamics
+
+This program validates Monte Carlo sampling methods for computing time-dependent
+observables in a quantum superposition of hydrogen's ground (1s) and first excited 
+(2s) states.
+
+Physical System
+---------------
+The quantum state evolves as:
+    |ψ(t)⟩ = 1/√2 (|ψ₁ₛ⟩ + |ψ₂ₛ⟩ e^(-i(E₂-E₁)t))
+
+This is a coherent superposition with analytically known time evolution. The relative
+phase between states evolves at the Bohr frequency ω = E₂ - E₁ = 0.375 a.u., causing
+periodic oscillations in spatial observables.
+
+Method
+------
+Uses Metropolis Monte Carlo sampling to evaluate spatial integrals without grids:
+1. Sample electron positions from probability distribution |ψ(r)|²
+2. Compute ⟨r⟩(t) = ∫ r |ψ(r,t)|² d³r via Monte Carlo integration
+3. Run Metropolis steps to maintain sampling distribution
+4. Extract oscillation frequency via FFT and compare to theory
+
+Key Implementation Details
+--------------------------
+- Batch size: 512 samples for statistical accuracy
+- MC thermalization: 100 warmup steps before data collection
+- Resampling: 10 Metropolis steps per time point to maintain distribution
+- Time resolution: 40,000 points over 200 a.u. of time
+- FFT with Hanning window for clean frequency extraction
+
+Expected Results
+----------------
+- Energy: ⟨E⟩ = (E₁ + E₂)/2 = -0.3125 Hartree (conserved)
+- Oscillation frequency: ω = E₂ - E₁ = 0.375 a.u.
+- Period: T = 2π/ω ≈ 16.75 a.u. of time
+- ⟨r⟩ oscillates sinusoidally around mean value
+
+Validation Checks
+-----------------
+1. Energy conservation throughout simulation
+2. FFT peak matches theoretical Bohr frequency (ω = 0.375 a.u.)
+3. Single dominant frequency (no spurious harmonics from sampling artifacts)
+4. Acceptance rate ~50% indicates good MC sampling
+
+Outputs
+-------
+- Time series: ⟨r⟩(t) showing quantum beat pattern
+- Power spectrum: FFT showing dominant frequency peak
+- Comparison: Numerical peak vs theoretical prediction (red dashed line)
+
+Notes
+-----
+- All quantities in atomic units (ℏ = m_e = e = 1)
+- Metropolis sampling adapts to time-dependent density |ψ(t)|²
+- Frequent resampling prevents drift from fixed initial distribution
+- Hanning window reduces spectral leakage in FFT analysis
+"""
+
+
 # Energy levels of H
 E1 = -0.5
 E2 = -0.125
