@@ -17,7 +17,9 @@ n_electrons = 1
 n_dim = 3
 
 key = jax.random.key(2)
-pos = jax.random.uniform(key, (batch_size, n_electrons * n_dim))
+
+key, subkey = jax.random.split(key)
+pos = jax.random.uniform(subkey, (batch_size, n_electrons * n_dim))
 params = jnp.array([0.0])
 
 def get_energy_mean_variance(energies):
@@ -54,8 +56,9 @@ mc_step = jax.jit(mc_step)
 
 print("Running warmup steps")
 ## Warmup steps
-for i in range(10):
-    pos, pmove = mc_step(params, pos, key, 0.5)
+for i in range(100):
+    key, subkey = jax.random.split(key)
+    pos, pmove = mc_step(params, pos, subkey, 0.5)
 print(pmove)
 print("Warmup completed")
 
@@ -68,7 +71,12 @@ print("Initial Local energy, variance")
 print(get_energy_mean_variance(le))
 
 
-t = jnp.linspace(0, 50.0, 200)
+# For importance sampling
+psi_ref = psi_t(params, pos, 0.0)
+density_ref = jnp.abs(psi_ref) ** 2
+
+
+t = jnp.linspace(0, 200.0, 40000)
 r_expect = []
 
 print("Starting simulation")
@@ -78,17 +86,21 @@ for ti in tqdm(t):
     #pos = jax.random.uniform(subkey, (200, 3))
     #key, subkey = jax.random.split(key)
 
-    #for i in range(10):
-    #    pos, pmove = mc_step(params, pos, subkey, 0.5)
+    for i in range(10):
+        key, subkey = jax.random.split(key)
+        pos, pmove = mc_step(params, pos, subkey, 0.5)
 
     psi = psi_b(params, pos, ti)
     density = jnp.abs(psi) ** 2
     r = jnp.linalg.norm(pos, axis=1)
 
+    #r_expect_t = jnp.sum(weights * r) / jnp.sum(weights)
+    #r_expect.append(r_expect_t)
+
     r_expect_t = jnp.sum(density * r) / jnp.sum(density)
     r_expect.append(r_expect_t)
     
-    print(get_energy_mean_variance(loc_energy(params, pos)))
+    #print(get_energy_mean_variance(loc_energy(params, pos)))
 
 r_expect = jnp.array(r_expect)
 

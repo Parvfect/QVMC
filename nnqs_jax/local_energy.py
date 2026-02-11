@@ -137,6 +137,6 @@ def get_local_energy_fn(f, Z, nelectrons):
         return result
 
     def te(params, x):
-        return pe(x) + _lapl_over_f(params, x)
+        return pe(x) + _lapl_over_f(params, x) 
     
     return jax.jit(jax.vmap(te, in_axes=(None, 0)))

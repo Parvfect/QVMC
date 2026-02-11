@@ -33,7 +33,7 @@ def f(params, x):
     r = jnp.linalg.norm(x)
     c1 = 1/jnp.sqrt(jnp.pi)
     c2 = 1/(4 * jnp.sqrt(2 * jnp.pi))
-    return c1 * jnp.exp(-r) + c2 * jnp.exp(-r/2) * (2 - r) * jnp.exp(1j * params.squeeze())
+    return (c1 * jnp.exp(-r) + c2 * jnp.exp(-r/2) * (2 - r) * jnp.exp(-1j * params.squeeze())) / (jnp.sqrt(2))
 
 f_b = jax.vmap(f, in_axes=(None, 0))
 f_b = jax.jit(f_b)
@@ -41,25 +41,37 @@ loc_energy = get_local_energy_fn(f, Z=1, nelectrons=1)
 
 def get_update(params, pos):
     """Gets theta dot"""
-    o_alpha = jax.jacfwd(lambda p: f_b(p, pos))(params)
+    # Compute log-derivative O_alpha = d(log psi)/d(theta)
+    o_alpha = jax.jacfwd(lambda p: jnp.log(f_b(p, pos)))(params)
+    o_alpha = o_alpha.squeeze()  # shape: (n_samples,)
+    
+    # Quantum geometric tensor S
     o_alpha_centered = o_alpha - jnp.mean(o_alpha)
-    s = jnp.mean(jnp.conj(o_alpha) * o_alpha_centered)
-    #s += 1e-8
-    energy = loc_energy(params, pos)
-    energy_centered = energy - jnp.mean(energy)
-    F_sup = jnp.mean(jnp.conj(o_alpha) * energy_centered)
-    F = -1j * F_sup
-    theta_dot = jnp.real(F)/jnp.real(s)
+    s = jnp.real(jnp.mean(jnp.conj(o_alpha_centered) * o_alpha_centered))
+    
+    # Local energy
+    energy = loc_energy(params, pos)  # shape: (n_samples,)
+    
+    # Force term F = <O_alpha^* E_L> - <O_alpha^*><E_L>
+    F = jnp.mean(jnp.conj(o_alpha) * energy) - jnp.mean(jnp.conj(o_alpha)) * jnp.mean(energy)
+    
+    # Equation: S * theta_dot = -i * F
+    # So: theta_dot = Re(-i * F) / S = Im(F) / S
+    theta_dot = jnp.imag(F) / s
     
     return theta_dot
+
 
 mc_step = metropolis_step(params, f_b, pos, key)
 theta_update = jax.jit(get_update)
 
 print("Running warmup steps")
-## Warmup steps
-for i in range(10):
-    pos, pmove = mc_step(params, pos, key, 0.5)
+key, subkey = jax.random.split(key)
+pos = jax.random.uniform(subkey, (4200, 3))
+
+for i in range(200):
+    key, subkey = jax.random.split(key)
+    pos, pmove = mc_step(params, pos, subkey, mcmc_width=0.5)
 print(pmove)
 print("Warmup completed")
 
@@ -69,37 +81,19 @@ print("Initial Local energy, variance")
 print(get_energy_mean_variance(le))
 
 
-t = jnp.linspace(0, 50.0, 200)
 r_expect = []
 dt = 0.01
+T = 50
+n_steps = int(T/dt)
 
 print("Starting simulation")
-key, subkey = jax.random.split(key)
-pos = jax.random.uniform(subkey, (200, 3))
 r_expect = []
-for i in range(10000):
+for i in tqdm(range(n_steps)):
 
-    # --- (1) Initialize / refresh walkers ---
-    #key, subkey = jax.random.split(key)
-    #pos = jax.random.uniform(subkey, (200, 3))
-
-    #for j in range(10):
-    #    key, subkey = jax.random.split(key)
-    #    pos, pmove = mc_step(params, pos, subkey, 0.5)
-
-    # --- (2) RK2 step ---
-    # k1
-    k1 = theta_update(params, pos)
+    theta_dot = theta_update(params, pos)
 
     # midpoint parameters
-    params_mid = params + 0.5 * dt * k1
-
-    # k2 (same walkers!)
-    k2 = theta_update(params_mid, pos)
-
-    # full update
-    params = params + dt * k2
-    print(k2)
+    params = params +  dt * theta_dot
 
     # --- (3) Observables ---
     psi = f_b(params, pos)
@@ -110,17 +104,6 @@ for i in range(10000):
     r_expect.append(r_expect_t)
 
     Eloc = loc_energy(params, pos)
-
-    t = i * dt
-
-    if t % 5 == 0:
-        print(f"Timestep {t}")
-        print(
-            f"Energy-variance {get_energy_mean_variance(Eloc)}")
-        print(f"R exp {r_expect_t}")
-        print(f"Theta {params}")
-        print(f"Expected {0.375 * t}")
-
 
 plt.figure(figsize=(8, 4))
 plt.plot(r_expect)
@@ -133,8 +116,8 @@ plt.show()
 
 
 print("Getting peak frequency")
+r_expect = jnp.array(r_expect)
 signal = r_expect - jnp.mean(r_expect)
-dt = t[1] - t[0]
 
 fft_vals = np.fft.rfft(signal)
 freqs = np.fft.rfftfreq(len(signal), dt)
@@ -146,9 +129,6 @@ f_peak = freqs[idx]
 
 omega_peak = 2 * np.pi * f_peak
 print("Extracted ω:", omega_peak)
-
-
-dt = t[1] - t[0]
 
 signal = r_expect - np.mean(r_expect)
 window = np.hanning(len(signal))
