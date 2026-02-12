@@ -70,7 +70,7 @@ E1 = -0.5
 E2 = -0.125
 
 # Sampling parameters
-batch_size = 512
+batch_size = 4200
 n_electrons = 1
 n_dim = 3
 
@@ -141,7 +141,7 @@ print(get_energy_mean_variance(le))
 
 r_expect = []
 dt = 0.01
-T = 50
+T = 100
 n_steps = int(T/dt)
 
 print("Starting simulation")
