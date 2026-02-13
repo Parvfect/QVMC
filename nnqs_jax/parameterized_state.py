@@ -141,7 +141,7 @@ print(get_energy_mean_variance(le))
 
 r_expect = []
 dt = 0.01
-T = 100
+T = 10
 n_steps = int(T/dt)
 
 print("Starting simulation")
